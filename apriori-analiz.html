@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abonelikler Veri Analizi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --surface: rgba(20, 21, 25, 0.85);
+            --primary: #d0bcff;
+            --outline: rgba(147, 143, 153, 0.3);
+            --blur: blur(20px);
+            --radius: 16px;
+            --bg-gradient: radial-gradient(circle at 50% 50%, rgb(79, 179, 168) 0%, #ffffff 100%);
+            --text-color: #e2e2e6;
+        }
+        body { margin: 0; overflow: hidden; background: var(--bg-gradient); font-family: 'Roboto', sans-serif; color: var(--text-color); }
+        .glass-window { position: absolute; background: var(--surface); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--outline); border-radius: var(--radius); box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; z-index: 1000; transition: opacity 0.3s ease, transform 0.3s ease; opacity: 0; pointer-events: none; transform: scale(0.95); }
+        .glass-window.active { opacity: 1; pointer-events: all; transform: scale(1); }
+        .window-header { display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid var(--outline); background: rgba(255, 255, 255, 0.03); }
+        .window-title { font-weight: 500; display: flex; gap: 10px; align-items: center; }
+        .window-close { cursor: pointer; padding: 5px; border-radius: 50%; transition: 0.2s; }
+        .window-close:hover { background: rgba(255, 255, 255, 0.1); }
+        .window-content { padding: 16px; overflow-y: auto; flex-grow: 1; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+        .md-btn { background: var(--primary); color: #222; border: none; padding: 10px 20px; border-radius: 20px; font-weight: 500; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; justify-content: center; width: 100%; }
+        .md-btn:hover { box-shadow: 0 0 15px rgba(208, 188, 255, 0.4); transform: translateY(-1px); }
+        .md-btn.outline { background: transparent; border: 1px solid var(--primary); color: white; }
+        .md-btn.secondary { background: transparent; border: 1px solid #555; color: white; }
+        .menu-btn { background: transparent; border: 1px solid var(--outline); color: #ddd; width: 100%; text-align: left; padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 10px; box-sizing: border-box; }
+        .menu-btn:hover, .menu-btn.active { background: rgba(208, 188, 255, 0.1); border-color: var(--primary); color: var(--primary); }
+        .p-item { padding: 8px; border-radius: 6px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; }
+        .p-item:hover { background: rgba(255, 255, 255, 0.1); }
+        .p-item.selected { background: rgba(208, 188, 255, 0.2); color: var(--primary); font-weight: bold; border: 1px solid var(--primary); }
+        #menu-fab { position: absolute; top: 20px; left: 20px; width: 50px; height: 50px; border-radius: 16px; background: var(--surface); backdrop-filter: blur(10px); border: 1px solid var(--outline); display: flex; justify-content: center; align-items: center; cursor: pointer; z-index: 2000; color: var(--primary); transition: 0.2s; }
+        #menu-fab:hover { transform: scale(1.1); }
+        #menu-window { top: 80px; left: 20px; width: 320px; max-height: 85vh; }
+        #analysis-window { top: 20px; right: 20px; width: 380px; max-height: 90vh; }
+        .sub-window { top: 20px; right: 410px; width: 400px; max-height: 90vh; }
+        .orb-label { position: absolute; pointer-events: none; color: white; font-weight: bold; background: none; padding: 0; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 0 5px black; transform: translate(-50%, -170%); font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { text-align: left; color: var(--primary); padding: 8px; border-bottom: 1px solid #555; }
+        td { padding: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .step-box { background: rgba(0, 0, 0, 0.3); border-left: 3px solid var(--primary); padding: 10px; margin-bottom: 15px; font-size: 0.85rem; }
+        .step-header { font-weight: bold; margin-bottom: 10px; color: #fff; display: block; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        .cand-table { width: 100%; margin-top: 5px; font-family: monospace; }
+        .cand-table td { padding: 4px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .eliminated { text-decoration: line-through; color: #777; }
+        .passed { color: #4ade80; font-weight: bold; }
+        #start-screen { position: absolute; inset: 0; background: rgba(5, 5, 10, 0.98); z-index: 5000; display: flex; justify-content: center; align-items: center; }
+        .input-group { width: 100%; box-sizing: border-box; padding: 10px; background: rgba(0,0,0,0.3); border: 1px solid #555; color: white; border-radius: 8px; }
+        .chip { padding: 5px 10px; background: rgba(255,255,255,0.1); border-radius: 10px; cursor: pointer; border: 1px solid var(--primary); transition: 0.2s; }
+        .chip.active { background: rgba(208, 188, 255, 0.2); }
+        .flex-row { display: flex; gap: 10px; margin-bottom: 20px; justify-content: center; }
+        .section-label { color: #aaa; display: block; margin: 15px 0 5px 0; font-size: 0.9em; }
+        .analysis-box { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 12px; margin-bottom: 15px; }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="start-screen">
+        <div style="text-align: center; width: 400px;">
+            <h1 style="color: var(--primary); font-family:'Roboto'; letter-spacing:2px; margin-bottom:30px;">ABONELİKLER VERİ ANALİZİ</h1>
+            <div style="background:rgba(255,255,255,0.05); padding:20px; border-radius:16px; border:1px solid #333;">
+                <div class="flex-row">
+                    <button class="md-btn outline" id="mode-file">Dosya</button>
+                    <button class="md-btn secondary" id="mode-url">URL</button>
+                </div>
+                <div id="input-file">
+                    <button class="md-btn" id="btn-upload"><i class="fas fa-upload"></i> CSV Seç</button>
+                    <input type="file" id="csvFile" accept=".csv" class="hidden">
+                    <div id="file-name" style="margin-top:10px; font-size:0.9rem; color:var(--primary);"></div>
+                </div>
+                <div id="input-url" class="hidden">
+                    <input type="text" id="urlInput" placeholder="Google Sheets CSV Linki" class="input-group" style="background:#222;">
+                </div>
+                <button class="md-btn" style="margin-top:20px;" id="btn-start">BAŞLAT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="menu-fab"><i class="fas fa-bars"></i></div>
+
+    <div id="menu-window" class="glass-window">
+        <div class="window-header">
+            <span class="window-title"><i class="fas fa-sliders-h"></i> Menü</span>
+            <div class="window-close" data-target="menu-window"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="window-content">
+            <small class="section-label" style="margin-top:0;">PENCERELER</small>
+            <button class="menu-btn" data-toggle="analysis-window"><i class="fas fa-chart-line"></i> Analiz Raporu</button>
+            <button class="menu-btn" data-toggle="rules-window"><i class="fas fa-list-ol"></i> Birliktelik Kuralları Tablosu</button>
+            <button class="menu-btn" data-toggle="iterations-window"><i class="fas fa-layer-group"></i> İterasyonlar</button>
+            <div style="height:1px; background:#444; margin:15px 0;"></div>
+            <small class="section-label">BÜTÇE FİLTRESİ</small>
+            <select id="budget-filter" class="input-group">
+                <option value="all">Tüm Bütçeler</option>
+            </select>
+            <small class="section-label">KATEGORİLER</small>
+            <div id="cat-filters" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
+            <small class="section-label">ARA</small>
+            <input type="text" id="search-input" placeholder="Platform..." class="input-group">
+            <div id="platform-list" style="margin-top:10px; max-height:200px; overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <div id="analysis-window" class="glass-window">
+        <div class="window-header">
+            <span class="window-title"><i class="fas fa-chart-pie"></i> Analiz Raporu</span>
+            <div class="window-close" data-target="analysis-window"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="window-content">
+            <div class="analysis-box">
+                <label style="font-size:0.8rem; display:flex; justify-content:space-between;">Min Destek <span id="val-sup" style="color:var(--primary)">0.05</span></label>
+                <input type="range" id="min-sup" min="0.01" max="1.0" step="0.01" value="0.05" style="width:100%">
+                <label style="font-size:0.8rem; display:flex; justify-content:space-between; margin-top:10px;">Min Güven <span id="val-conf" style="color:var(--primary)">0.20</span></label>
+                <input type="range" id="min-conf" min="0.01" max="1.0" step="0.01" value="0.20" style="width:100%">
+                <button class="md-btn" style="margin-top:15px;" id="btn-calc">HESAPLA</button>
+            </div>
+            <div id="analysis-result">
+                <div style="text-align:center; padding:30px; color:#666;">
+                    <i class="fas fa-hand-pointer fa-2x"></i><br><br>Seçmek için Tıkla<br>Sürüklemek için Çift Tıkla & Tut
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="rules-window" class="glass-window sub-window">
+        <div class="window-header">
+            <span class="window-title"><i class="fas fa-list"></i> Birliktelik Kuralları Tablosu</span>
+            <div class="window-close" data-target="rules-window"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="window-content">
+            <table id="rules-table">
+                <thead><tr><th>Kural</th><th>Lift</th><th>Güven</th></tr></thead>
+                <tbody id="rules-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="iterations-window" class="glass-window sub-window">
+        <div class="window-header">
+            <span class="window-title"><i class="fas fa-layer-group"></i> İterasyonlar</span>
+            <div class="window-close" data-target="iterations-window"><i class="fas fa-times"></i></div>
+        </div>
+        <div class="window-content" id="iteration-content">
+            <div style="color:#aaa; text-align:center;">Önce "HESAPLA" butonuna basınız.</div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        const CONFIG = {
+            radius: 54, friction: 0.97, bounce: 0.8, ambientMove: 0.15, maxVel: 20,
+            bounds: { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+        };
+
+        const BRAND_COLORS = {
+            "Netflix": ["#E50914", "#B20710"], "YouTube Premium": ["#FF0000", "#C4302B"], "Disney+": ["#113CCF", "#000000"],
+            "Spotify": ["#1DB954", "#191414"], "Amazon Prime Video": ["#00A8E1", "#000000"], "Apple Music": ["#FA243C", "#000000"],
+            "iCloud+": ["#3699F1", "#ffffff"], "Google One": ["#4285F4", "#34A853"], "Microsoft 365": ["#D83B01", "#F25022"],
+            "PlayStation Plus": ["#00439C", "#003791"], "Xbox Game Pass": ["#107C10", "#0e5c0e"], "Steam": ["#171a21", "#66c0f4"],
+            "Discord Nitro": ["#5865F2", "#404EED"], "Twitch": ["#9146FF", "#6441A5"], "Exxen": ["#FFD700", "#000000"],
+            "TOD / beIN Connect": ["#5a2e98", "#2a0d55"]
+        };
+
+        const PLATFORM_MAP = {
+            "Netflix": "Netflix", "YouTube Premium": "YouTube Premium", "Disney+": "Disney+", "Amazon Prime Video": "Amazon Prime Video",
+            "Apple TV+": "Apple TV+", "Gain": "Gain", "Exxen": "Exxen", "TOD / beIN Connect": "TOD / beIN Connect", "S Sport Plus": "S Sport Plus",
+            "MUBI": "MUBI", "Spotify": "Spotify", "Apple Music": "Apple Music", "YouTube Music": "YouTube Music", "Fizy": "Fizy",
+            "Deezer": "Deezer", "Storytel": "Storytel", "iCloud+ (Apple Depolama)": "iCloud+", "Google One (Drive/Fotoğraflar ek alan)": "Google One",
+            "Microsoft 365 (Office)": "Microsoft 365", "ChatGPT Plus/Pro": "ChatGPT Plus/Pro", "Gemini Pro/Ultra": "Gemini Pro/Ultra",
+            "Claude Pro": "Claude Pro", "GitHub Copilot": "GitHub Copilot", "LinkedIn Premium": "LinkedIn Premium",
+            "Adobe Creative Cloud": "Adobe Creative Cloud", "Canva Pro": "Canva Pro", "Xbox Game Pass": "Xbox Game Pass",
+            "Discord Nitro": "Discord Nitro", "GeForce Now / Game+": "GeForce Now / Game+", "Steam (Aktif harcama yapıyorsanız işaretleyiniz)": "Steam",
+            "Epic Games Store (Aktif harcama yapıyorsanız işaretleyiniz)": "Epic Games Store", "Twitch (Herhangi bir kanala aboneseniz)": "Twitch",
+            "Kick (Herhangi bir kanala aboneseniz)": "Kick", "Blue tv": "Blu tv", "HBO": "HBO", "Colab": "Google Colab",
+            "Google colab": "Google Colab", "kick": "Kick", "ps plus": "PlayStation Plus"
+        };
+
+        const BUDGET_ORDER = ["0 - 250TL", "250 - 500TL", "500 - 1000 TL", "1000 - 2000 TL", "2000+ TL"];
+
+        const state = {
+            scene: null, camera: null, renderer: null, raycaster: new THREE.Raycaster(), mouse: new THREE.Vector2(),
+            dragPlane: null, nodes: [], transactions: [], sparks: [], selectedNodes: [],
+            isDragging: false, isDoubleDown: false, lastMousePos: new THREE.Vector2(), uploadMode: 'file',
+            lastClickTime: 0, lastTrigTime: 0
+        };
+
+        const dom = {
+            modeFile: document.getElementById('mode-file'), modeUrl: document.getElementById('mode-url'),
+            inputFile: document.getElementById('input-file'), inputUrl: document.getElementById('input-url'),
+            fileName: document.getElementById('file-name'), csvFile: document.getElementById('csvFile'),
+            urlInput: document.getElementById('urlInput'), startScreen: document.getElementById('start-screen'),
+            menuWindow: document.getElementById('menu-window'), analysisWindow: document.getElementById('analysis-window'),
+            rulesWindow: document.getElementById('rules-window'), iterationsWindow: document.getElementById('iterations-window'),
+            catFilters: document.getElementById('cat-filters'), budgetFilter: document.getElementById('budget-filter'),
+            platformList: document.getElementById('platform-list'), searchInput: document.getElementById('search-input'),
+            valSup: document.getElementById('val-sup'), minSup: document.getElementById('min-sup'),
+            valConf: document.getElementById('val-conf'), minConf: document.getElementById('min-conf'),
+            analysisResult: document.getElementById('analysis-result'), rulesBody: document.getElementById('rules-body'),
+            iterationContent: document.getElementById('iteration-content')
+        };
+
+        function initEventListeners() {
+            dom.modeFile.addEventListener('click', () => setMode('file'));
+            dom.modeUrl.addEventListener('click', () => setMode('url'));
+            document.getElementById('btn-upload').addEventListener('click', () => dom.csvFile.click());
+            dom.csvFile.addEventListener('change', (e) => { if (e.target.files.length) dom.fileName.innerText = e.target.files[0].name; });
+            document.getElementById('btn-start').addEventListener('click', startApp);
+            document.getElementById('menu-fab').addEventListener('click', (e) => { e.stopPropagation(); toggleWindow('menu-window'); });
+            document.getElementById('btn-calc').addEventListener('click', runAprioriAnalysis);
+            
+            dom.minSup.addEventListener('input', (e) => dom.valSup.innerText = e.target.value);
+            dom.minConf.addEventListener('input', (e) => dom.valConf.innerText = e.target.value);
+            dom.searchInput.addEventListener('input', (e) => filterList(e.target.value));
+            dom.budgetFilter.addEventListener('change', applyFilters);
+
+            document.querySelectorAll('.window-close').forEach(el => el.addEventListener('click', () => closeWindow(el.dataset.target)));
+            document.querySelectorAll('[data-toggle]').forEach(el => el.addEventListener('click', () => toggleSubWindow(el.dataset.toggle)));
+            
+            window.addEventListener('mousedown', onMouseDown);
+            window.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('mouseup', () => { state.isDragging = false; state.isDoubleDown = false; });
+            window.addEventListener('resize', onResize);
+        }
+
+        function setMode(mode) {
+            state.uploadMode = mode;
+            dom.modeFile.className = mode === 'file' ? 'md-btn outline' : 'md-btn secondary';
+            dom.modeUrl.className = mode === 'url' ? 'md-btn outline' : 'md-btn secondary';
+            dom.inputFile.className = mode === 'file' ? '' : 'hidden';
+            dom.inputUrl.className = mode === 'url' ? '' : 'hidden';
+        }
+
+        function toggleWindow(id) { document.getElementById(id).classList.toggle('active'); }
+        function closeWindow(id) { document.getElementById(id).classList.remove('active'); }
+        function toggleSubWindow(id) {
+            if (id === 'rules-window') closeWindow('iterations-window');
+            if (id === 'iterations-window') closeWindow('rules-window');
+            toggleWindow(id);
+        }
+
+        async function startApp() {
+            try {
+                let csv = "";
+                if (state.uploadMode === 'file') {
+                    const file = dom.csvFile.files[0];
+                    if (!file) throw new Error("Dosya seçiniz.");
+                    csv = await file.text();
+                } else {
+                    const url = dom.urlInput.value.trim();
+                    if (!url) throw new Error("URL giriniz.");
+                    csv = await fetchUrl(url);
+                }
+                const parsed = Papa.parse(csv, { header: true, skipEmptyLines: true });
+                processData(parsed.data);
+                dom.startScreen.style.display = 'none';
+                initThree();
+                updatePlatformList();
+                animate();
+            } catch (e) { alert(e.message); }
+        }
+
+        async function fetchUrl(url) {
+            const proxies = [
+                `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+                `https://corsproxy.io/?${encodeURIComponent(url)}`
+            ];
+            for (const proxy of proxies) {
+                try {
+                    const res = await fetch(proxy);
+                    if (res.ok) {
+                        const txt = await res.text();
+                        if (!txt.includes("<!DOCTYPE")) return txt;
+                    }
+                } catch (e) {}
+            }
+            throw new Error("Veri çekilemedi. Lütfen dosyayı indirip yükleyin.");
+        }
+
+        function processData(data) {
+            state.transactions = []; state.nodes = [];
+            const categories = new Set();
+            const budgets = new Set();
+
+            data.forEach(row => {
+                let transaction = [];
+                let budget = null;
+                Object.values(row).forEach(v => { if (BUDGET_ORDER.includes(v)) budget = v; });
+                if (budget) budgets.add(budget);
+
+                Object.keys(row).forEach(key => {
+                    if (/zaman|Timestamp|bütçe|harcama/i.test(key)) return;
+                    
+                    let cat = "Diğer";
+                    if (/video/i.test(key)) cat = "Video";
+                    else if (/müzik/i.test(key)) cat = "Müzik";
+                    else if (/bulut|iş/i.test(key)) cat = "Bulut/İş";
+                    else if (/oyun/i.test(key)) cat = "Oyun";
+
+                    const val = row[key];
+                    if (!val) return;
+
+                    val.split(',').forEach(part => {
+                        const clean = part.trim().replace(/['"]/g, '');
+                        let name = PLATFORM_MAP[clean];
+                        if (!name) {
+                            const match = Object.keys(PLATFORM_MAP).find(k => k === clean);
+                            if (match) name = PLATFORM_MAP[match];
+                        }
+
+                        if (name) {
+                            transaction.push(name);
+                            let node = state.nodes.find(n => n.name === name);
+                            if (!node) {
+                                node = {
+                                    name, category: cat, budgetSet: new Set(),
+                                    x: (Math.random() - 0.5) * window.innerWidth * 0.7,
+                                    y: (Math.random() - 0.5) * window.innerHeight * 0.7,
+                                    vx: 0, vy: 0, radius: CONFIG.radius, mesh: null, visible: true
+                                };
+                                state.nodes.push(node);
+                                categories.add(cat);
+                            }
+                            if (budget) node.budgetSet.add(budget);
+                        }
+                    });
+                });
+                if (transaction.length) state.transactions.push([...new Set(transaction)]);
+            });
+
+            dom.catFilters.innerHTML = '';
+            categories.forEach(c => {
+                const s = document.createElement('span');
+                s.className = 'chip active'; s.innerText = c;
+                s.onclick = () => { s.classList.toggle('active'); s.style.borderColor = s.classList.contains('active') ? 'var(--primary)' : 'transparent'; applyFilters(); };
+                dom.catFilters.appendChild(s);
+            });
+
+            dom.budgetFilter.innerHTML = '<option value="all">Tüm Bütçeler</option>';
+            BUDGET_ORDER.forEach(b => {
+                if (budgets.has(b)) {
+                    const opt = document.createElement('option'); opt.value = b; opt.innerText = b;
+                    dom.budgetFilter.appendChild(opt);
+                }
+            });
+        }
+
+        function initThree() {
+            state.scene = new THREE.Scene();
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = 600;
+            state.camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+            state.camera.position.z = 100;
+
+            state.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            state.renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvas-container').appendChild(state.renderer.domElement);
+
+            state.scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+            const dl = new THREE.DirectionalLight(0xffffff, 0.6); dl.position.set(10, 10, 20); state.scene.add(dl);
+
+            state.dragPlane = new THREE.Mesh(new THREE.PlaneGeometry(5000, 5000), new THREE.MeshBasicMaterial({ visible: false }));
+            state.scene.add(state.dragPlane);
+
+            const loader = new THREE.TextureLoader();
+            state.nodes.forEach(node => {
+                const geo = new THREE.CylinderGeometry(node.radius, node.radius, 5, 32);
+                geo.rotateX(Math.PI / 2);
+                const mat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.1, roughness: 0.1, transmission: 0.1 });
+                
+                const colors = BRAND_COLORS[node.name] || generateHashColors(node.name);
+                loadTexture(node.name, colors, loader, tex => {
+                    tex.center.set(0.5, 0.5); tex.rotation = Math.PI / 2;
+                    mat.map = tex; mat.needsUpdate = true;
+                });
+
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(node.x, node.y, 0);
+                mesh.userData = { node };
+                state.scene.add(mesh);
+                node.mesh = mesh;
+
+                const label = document.createElement('div');
+                label.className = 'orb-label'; label.innerText = node.name;
+                document.body.appendChild(label);
+                node.label = label;
+            });
+        }
+
+        function generateHashColors(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return [`hsl(${Math.abs(hash) % 360}, 70%, 50%)`, `hsl(${(Math.abs(hash) + 40) % 360}, 60%, 30%)`];
+        }
+
+        function loadTexture(name, colors, loader, cb) {
+            const clean = name.toLowerCase().replace(/ /g, '').replace(/\+/g, 'plus').replace(/[^\w]/g, '');
+            loader.load(clean + '.png', cb, undefined, () => {
+                const c = document.createElement('canvas'); c.width = 256; c.height = 256;
+                const ctx = c.getContext('2d');
+                const g = ctx.createLinearGradient(0, 0, 256, 256);
+                g.addColorStop(0, colors[0]); g.addColorStop(1, colors[1]);
+                ctx.fillStyle = g; ctx.beginPath(); ctx.arc(128, 128, 128, 0, Math.PI * 2); ctx.fill();
+                ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.font = 'bold 50px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(name.substring(0, 3).toUpperCase(), 128, 128);
+                cb(new THREE.CanvasTexture(c));
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            state.nodes.forEach(node => {
+                if (!node.visible) return;
+                
+                if (!state.isDragging || !state.selectedNodes.includes(node)) {
+                    if (Math.random() < 0.2) {
+                        node.vx += (Math.random() - 0.5) * CONFIG.ambientMove;
+                        node.vy += (Math.random() - 0.5) * CONFIG.ambientMove;
+                    }
+                    node.x += node.vx; node.y += node.vy;
+                    node.vx *= CONFIG.friction; node.vy *= CONFIG.friction;
+                    node.vx = Math.max(-CONFIG.maxVel, Math.min(CONFIG.maxVel, node.vx));
+                    node.vy = Math.max(-CONFIG.maxVel, Math.min(CONFIG.maxVel, node.vy));
+
+                    if (Math.abs(node.x) > window.innerWidth / 2) { node.x = Math.sign(node.x) * window.innerWidth / 2; node.vx *= -CONFIG.bounce; }
+                    if (Math.abs(node.y) > window.innerHeight / 2) { node.y = Math.sign(node.y) * window.innerHeight / 2; node.vy *= -CONFIG.bounce; }
+                }
+
+                node.mesh.position.set(node.x, node.y, 0);
+                const p = node.mesh.position.clone().project(state.camera);
+                node.label.style.left = ((p.x * .5 + .5) * window.innerWidth) + 'px';
+                node.label.style.top = ((-(p.y * .5) + .5) * window.innerHeight - node.radius + 35) + 'px';
+                node.label.style.display = node.visible ? 'block' : 'none';
+            });
+
+            for (let i = 0; i < state.nodes.length; i++) {
+                for (let j = i + 1; j < state.nodes.length; j++) {
+                    const a = state.nodes[i], b = state.nodes[j];
+                    if (!a.visible || !b.visible) continue;
+                    const dx = b.x - a.x, dy = b.y - a.y;
+                    const distSq = dx * dx + dy * dy;
+                    const rSum = a.radius + b.radius;
+
+                    if (distSq < rSum * rSum) {
+                        const dist = Math.sqrt(distSq);
+                        const overlap = (rSum - dist) / 2;
+                        const nx = dx / dist, ny = dy / dist;
+
+                        if (!state.selectedNodes.includes(a)) { a.x -= nx * overlap; a.y -= ny * overlap; }
+                        if (!state.selectedNodes.includes(b)) { b.x += nx * overlap; b.y += ny * overlap; }
+
+                        const vax = a.vx, vay = a.vy, vbx = b.vx, vby = b.vy;
+                        if (!state.selectedNodes.includes(a)) { a.vx = vbx * 0.9; a.vy = vby * 0.9; }
+                        if (!state.selectedNodes.includes(b)) { b.vx = vax * 0.9; b.vy = vay * 0.9; }
+
+                        createSpark((a.x + b.x) / 2, (a.y + b.y) / 2);
+                        if (state.selectedNodes.includes(a) && !state.selectedNodes.includes(b)) triggerPairAnalysis(b);
+                        else if (state.selectedNodes.includes(b) && !state.selectedNodes.includes(a)) triggerPairAnalysis(a);
+                    }
+                }
+            }
+
+            state.sparks = state.sparks.filter(s => s.life > 0);
+            state.sparks.forEach(s => { s.life--; s.mesh.position.add(s.vel); s.mesh.material.opacity = s.life / 30; });
+            state.renderer.render(state.scene, state.camera);
+        }
+
+        function createSpark(x, y) {
+            if (state.sparks.length > 50) return;
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true });
+            const mesh = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), mat);
+            mesh.position.set(x, y, 1); state.scene.add(mesh);
+            state.sparks.push({ mesh, vel: new THREE.Vector3((Math.random() - .5) * 8, (Math.random() - .5) * 8, 0), life: 25 });
+        }
+
+        function onMouseDown(e) {
+            if (e.target.tagName !== 'CANVAS') return;
+            ['menu-window', 'rules-window', 'iterations-window', 'analysis-window'].forEach(closeWindow);
+            state.mouse.x = (e.clientX / window.innerWidth) * 2 - 1; 
+            state.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            state.raycaster.setFromCamera(state.mouse, state.camera);
+            const hit = state.raycaster.intersectObjects(state.scene.children).find(h => h.object.userData.node?.visible);
+
+            if (hit) {
+                const node = hit.object.userData.node;
+                const now = Date.now();
+                if (now - state.lastClickTime < 300 && state.selectedNodes.includes(node)) {
+                    state.isDragging = true; state.isDoubleDown = true;
+                    state.dragPlane.position.copy(hit.object.position);
+                } else {
+                    if (state.selectedNodes.includes(node)) deselectNode(node); else selectNode(node);
+                }
+                state.lastClickTime = now;
+            } else {
+                state.selectedNodes.forEach(deselectNode);
+            }
+        }
+
+        function onMouseMove(e) {
+            if (state.isDragging && state.isDoubleDown) {
+                state.mouse.x = (e.clientX / window.innerWidth) * 2 - 1; 
+                state.mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                state.raycaster.setFromCamera(state.mouse, state.camera);
+                const hit = state.raycaster.intersectObject(state.dragPlane);
+                if (hit.length) {
+                    const pt = hit[0].point;
+                    state.selectedNodes.forEach((node, i) => {
+                        node.vx = (pt.x - node.x) * 0.2; node.vy = (pt.y - node.y) * 0.2;
+                        node.x = pt.x + (i % 2 === 0 ? 1 : -1) * i * 15; node.y = pt.y;
+                    });
+                }
+            }
+        }
+
+        function onResize() {
+            const aspect = window.innerWidth / window.innerHeight;
+            const d = 600;
+            state.camera.left = -d * aspect; state.camera.right = d * aspect;
+            state.camera.updateProjectionMatrix(); state.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function selectNode(node) {
+            if (!state.selectedNodes.includes(node)) state.selectedNodes.push(node);
+            node.mesh.material.emissive.setHex(0xaa00ff); node.mesh.material.emissiveIntensity = 0.8;
+            updatePlatformList();
+        }
+
+        function deselectNode(node) {
+            state.selectedNodes = state.selectedNodes.filter(x => x !== node);
+            node.mesh.material.emissive.setHex(0);
+            updatePlatformList();
+        }
+
+        function triggerPairAnalysis(targetNode) {
+            if (Date.now() - state.lastTrigTime < 800) return; 
+            state.lastTrigTime = Date.now();
+
+            const group = state.selectedNodes.map(n => n.name);
+            const consequent = targetNode.name;
+            const N = state.transactions.length;
+            let nG = 0, nC = 0, nBoth = 0;
+            
+            state.transactions.forEach(t => {
+                const hasGroup = group.every(x => t.includes(x));
+                const hasCons = t.includes(consequent);
+                if (hasGroup) nG++; if (hasCons) nC++; if (hasGroup && hasCons) nBoth++;
+            });
+
+            const conf = nG ? nBoth / nG : 0;
+            const lift = (nG && nC) ? conf / (nC / N) : 0;
+            const color = lift > 1 ? '#4ade80' : '#f87171';
+
+            dom.analysisResult.innerHTML = `
+            <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:10px; border-left:4px solid ${color}">
+                <h4 style="margin:0 0 10px 0;">${group.join('+')} <i class="fas fa-arrow-right"></i> ${consequent}</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                    <div style="background:#222; padding:10px; border-radius:5px; text-align:center;">
+                        <div style="font-size:1.4em; font-weight:bold; color:white;">${lift.toFixed(2)}</div>
+                        <small style="color:#aaa">LIFT</small>
+                    </div>
+                    <div style="background:#222; padding:10px; border-radius:5px; text-align:center;">
+                        <div style="font-size:1.4em; font-weight:bold; color:var(--primary)">%${(conf * 100).toFixed(0)}</div>
+                        <small style="color:#aaa">GÜVEN</small>
+                    </div>
+                </div>
+            </div>`;
+            dom.analysisWindow.classList.add('active');
+        }
+
+        function runAprioriAnalysis() {
+            const minSup = parseFloat(dom.minSup.value);
+            const minConf = parseFloat(dom.minConf.value);
+            const N = state.transactions.length;
+            const steps = [];
+            
+            const calcSup = (set) => state.transactions.filter(t => set.every(v => t.includes(v))).length / N;
+
+            let itemCounts = {};
+            state.transactions.forEach(t => t.forEach(i => itemCounts[i] = (itemCounts[i] || 0) + 1));
+            let L1 = Object.keys(itemCounts).filter(i => (itemCounts[i] / N) >= minSup).map(i => [i]);
+            
+            steps.push({ 
+                k: 1, 
+                candidates: Object.keys(itemCounts).map(i => ({ set: [i], s: itemCounts[i] / N })), 
+                frequent: L1.map(i => ({ set: i, s: itemCounts[i[0]] / N })) 
+            });
+
+            let currentL = L1, k = 2, freqs = {};
+            L1.forEach(i => freqs[i[0]] = itemCounts[i[0]] / N);
+
+            while (currentL.length > 0 && k < 4) {
+                let Ck = [];
+                for (let i = 0; i < currentL.length; i++) {
+                    for (let j = i + 1; j < currentL.length; j++) {
+                        const merged = [...new Set([...currentL[i], ...currentL[j]])].sort();
+                        if (merged.length === k && !Ck.some(c => JSON.stringify(c) === JSON.stringify(merged))) Ck.push(merged);
+                    }
+                }
+                
+                let Lk = [], CkLogs = [];
+                Ck.forEach(cand => {
+                    const s = calcSup(cand);
+                    CkLogs.push({ set: cand, s });
+                    if (s >= minSup) { Lk.push(cand); freqs[cand.join(',')] = s; }
+                });
+                
+                if (!Lk.length) break;
+                steps.push({ k, candidates: CkLogs, frequent: Lk.map(x => ({ set: x, s: freqs[x.join(',')] })) });
+                currentL = Lk; k++;
+            }
+
+            dom.rulesBody.innerHTML = '';
+            Object.keys(freqs).forEach(key => {
+                const set = key.split(',');
+                if (set.length === 2) {
+                    [set, set.slice().reverse()].forEach(([A, B]) => {
+                        const sAnt = freqs[A] || calcSup([A]);
+                        const conf = freqs[key] / sAnt;
+                        if (conf >= minConf) {
+                            const lift = conf / (freqs[B] || calcSup([B]));
+                            const color = lift > 1 ? '#4ade80' : '#f87171';
+                            dom.rulesBody.innerHTML += `<tr><td>${A} -> ${B}</td><td style="color:${color}">${lift.toFixed(2)}</td><td>%${(conf * 100).toFixed(0)}</td></tr>`;
+                        }
+                    });
+                }
+            });
+
+            dom.iterationContent.innerHTML = steps.map(st => `
+                <div class="step-box"><span class="step-header">ADIM ${st.k}</span>
+                <div style="font-size:0.8em; color:#aaa; margin-top:5px;">Adaylar (C${st.k})</div><table class="cand-table">
+                ${st.candidates.map(c => {
+                    const pass = c.s >= minSup;
+                    return `<tr><td class="${pass ? 'passed' : 'eliminated'}">{${c.set.join(', ')}}</td><td>${c.s.toFixed(3)}</td></tr>`;
+                }).join('')}
+                </table>
+                <div style="font-size:0.8em; color:#aaa; margin-top:10px;">Frekanslılar (L${st.k})</div><table class="cand-table">
+                ${st.frequent.map(l => `<tr><td class="passed">{${l.set.join(', ')}}</td><td>${l.s.toFixed(3)}</td></tr>`).join('')}
+                </table></div>`).join('');
+        }
+
+        function applyFilters() {
+            const activeCats = Array.from(dom.catFilters.querySelectorAll('.chip.active')).map(c => c.innerText);
+            const budget = dom.budgetFilter.value;
+            state.nodes.forEach(node => {
+                let vis = activeCats.includes(node.category);
+                if (budget !== 'all' && !node.budgetSet.has(budget)) vis = false;
+                node.visible = vis; node.mesh.visible = vis;
+            });
+        }
+
+        function updatePlatformList() {
+            dom.platformList.innerHTML = '';
+            state.nodes.sort((a, b) => a.name.localeCompare(b.name)).forEach(node => {
+                const div = document.createElement('div'); div.innerText = node.name; div.className = 'p-item';
+                if (state.selectedNodes.includes(node)) div.classList.add('selected');
+                div.onclick = () => state.selectedNodes.includes(node) ? deselectNode(node) : selectNode(node);
+                dom.platformList.appendChild(div);
+            });
+        }
+
+        function filterList(v) {
+            const term = v.toLowerCase();
+            document.querySelectorAll('.p-item').forEach(d => d.style.display = d.innerText.toLowerCase().includes(term) ? 'flex' : 'none');
+        }
+
+        initEventListeners();
+    </script>
+</body>
+</html>
