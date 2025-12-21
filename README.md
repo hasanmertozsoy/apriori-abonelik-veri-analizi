@@ -1,4 +1,4 @@
-# Apriori Analiz (apriori-analiz.html)
+# Apriori Abonelik Veri Analizi
 
 Bu proje, Apriori algoritmasıyla ilişkilendirme kurallarını görsel olarak ve basit bir HTML arayüzünde analiz etmek için hazırlanmış tek dosyalık bir uygulamadır. Minimal bağımlılıklar gerektiren, doğrudan tarayıcıda çalıştırılabilecek bir araçtır.
 
