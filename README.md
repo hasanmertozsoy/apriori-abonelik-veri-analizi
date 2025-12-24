@@ -19,7 +19,7 @@ Not: Modern bir tarayıcı (Chrome, Edge, Firefox) kullanılması tavsiye edilir
 
 ## Dosya yapısı
 
-- `apriori-analiz.html` — Ana uygulama dosyası. Tüm HTML, CSS ve (varsa) JavaScript içerikleri bu dosyada yer alır.
+- `apriori-analiz.html` — Ana uygulama dosyası. Tüm HTML, CSS ve JavaScript içerikleri bu dosyada yer alır.
 
 ## Katkıda bulunma
 
